@@ -2,10 +2,16 @@ module github.com/HarrisonWAffel/terminal-chat
 
 go 1.17
 
-require github.com/pion/webrtc/v3 v3.1.7
+require (
+	github.com/google/uuid v1.3.0
+	github.com/jroimartin/gocui v0.5.0
+	github.com/pion/webrtc/v3 v3.1.7
+	github.com/pkg/errors v0.9.1
+)
 
 require (
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
+	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/pion/datachannel v1.5.0 // indirect
 	github.com/pion/dtls/v2 v2.0.10 // indirect
 	github.com/pion/ice/v2 v2.1.13 // indirect

@@ -9,16 +9,40 @@ import (
 	"github.com/HarrisonWAffel/terminal-chat/internal/pion"
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v3"
+	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 type Client struct {
+	AppCtx *internal.AppCtx
+	Key    string
 	*webrtc.PeerConnection
-	c chan webrtc.SessionDescription
+	ICECandidateChan chan webrtc.SessionDescription
+	GuiInfo          *GUI
+}
+
+type I interface {
+	HandleInput(d *webrtc.DataChannel)
+	RenderOutput(msg webrtc.DataChannelMessage)
+}
+
+type HostClient interface {
+	HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig)
+}
+
+type ReceivingClient interface {
+	ConnectToConversationId(appCtx *internal.AppCtx, conversationId string)
+}
+
+type Host struct {
+	*Client
+}
+
+type Receiver struct {
+	*Client
 }
 
 var urls = []string{
@@ -39,29 +63,35 @@ var urls = []string{
 	"stun:stun.voxgratia.org",
 }
 
-func NewReceiverClient(name string, isTest bool) *Client {
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: urls,
-			},
+var Config = webrtc.Configuration{
+	ICEServers: []webrtc.ICEServer{
+		{
+			URLs: urls,
 		},
-	}
+	},
+}
 
-	pc, err := webrtc.NewPeerConnection(config)
+func NewReceiverClient(appCtx *internal.AppCtx) ReceivingClient {
+	pc, err := webrtc.NewPeerConnection(Config)
 	if err != nil {
 		panic(err)
 	}
 	c := &Client{
-		PeerConnection: pc,
-		c:              make(chan webrtc.SessionDescription, 1),
+		AppCtx:           appCtx,
+		PeerConnection:   pc,
+		ICECandidateChan: make(chan webrtc.SessionDescription, 1),
+		GuiInfo: &GUI{
+			InputChan:   make(chan string),
+			OutputChan:  make(chan string),
+			NetworkChan: make(chan string),
+			Username:    appCtx.ScreenName,
+		},
 	}
 
 	// Set the handler for Peer connection state
 	// This will notify you when the peer has connected/disconnected
 	c.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
-
 		if s == webrtc.PeerConnectionStateFailed {
 			// Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
 			// Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
@@ -73,84 +103,100 @@ func NewReceiverClient(name string, isTest bool) *Client {
 
 	// Register data channel creation handling
 	c.OnDataChannel(func(d *webrtc.DataChannel) {
-		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
+		fmt.Printf("DataChannel %s-%d open\n\n", d.Label(), d.ID())
+		if c.Key == "" {
+			setKey(c, d)
+		}
 
 		// Register channel opening handling
 		d.OnOpen(func() {
-			if isTest {
-				fmt.Printf("Data channel '%s'-'%d' open. Random messages will now be sent to any connected DataChannels every 5 seconds\n", d.Label(), d.ID())
-				for range time.NewTicker(5 * time.Second).C {
-					message := "hello world"
-					fmt.Printf("Sending '%s'\n", message)
-
-					// Send the message as text
-					sendErr := d.SendText(message)
-					if sendErr != nil {
-						panic(sendErr)
+			go func() {
+				for {
+					select {
+					case msg := <-c.GuiInfo.NetworkChan:
+						d.SendText(msg)
 					}
 				}
-			} else {
-				HandleInput(name, d)
+			}()
+			err := c.GuiInfo.StartGUI()
+			if err != nil {
+				os.Exit(1)
 			}
 		})
 
 		// Register text message handling
 		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-			RenderOutput(msg, name)
+			c.GuiInfo.OutputChan <- string(msg.Data)
 		})
 	})
 
-	return c
+	return &Receiver{Client: c}
 }
 
-func NewOfferClient(name string, isTest bool) *Client {
-	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: urls,
-			},
-		},
-	}
-
-	pc, err := webrtc.NewPeerConnection(config)
+func NewOfferClient(appCtx *internal.AppCtx) HostClient {
+	pc, err := webrtc.NewPeerConnection(Config)
 	if err != nil {
 		panic(err)
 	}
 	c := &Client{
-		PeerConnection: pc,
-		c:              make(chan webrtc.SessionDescription, 1),
+		AppCtx:           appCtx,
+		PeerConnection:   pc,
+		ICECandidateChan: make(chan webrtc.SessionDescription, 1),
+		GuiInfo: &GUI{
+			InputChan:   make(chan string),
+			OutputChan:  make(chan string),
+			NetworkChan: make(chan string),
+			Username:    appCtx.ScreenName,
+		},
 	}
 
-	sendChannel, err := c.CreateDataChannel("conversation", nil)
+	d, err := c.CreateDataChannel("conversation", nil)
 	if err != nil {
 		panic(err)
 	}
 
-	sendChannel.OnClose(func() {
-		fmt.Println("conversation data channel has closed")
+	d.OnClose(func() {
+		fmt.Println("data channel has closed")
 	})
 
-	sendChannel.OnOpen(func() {
-		fmt.Println("conversation data channel opened")
-		if !isTest {
-			HandleInput(name, sendChannel)
+	c.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
+		if s == webrtc.PeerConnectionStateFailed {
+			fmt.Println("Peer Connection has gone to failed, exiting")
+			os.Exit(0)
 		}
 	})
 
-	sendChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		RenderOutput(msg, name)
+	d.OnOpen(func() {
+		if c.Key == "" {
+			setKey(c, d)
+		}
+		go func() {
+			for {
+				select {
+				case msg := <-c.GuiInfo.NetworkChan:
+					d.SendText(msg)
+				}
+			}
+		}()
+		err := c.GuiInfo.StartGUI()
+		if err != nil {
+			os.Exit(1)
+		}
 	})
 
-	return c
+	d.OnMessage(func(msg webrtc.DataChannelMessage) {
+		c.GuiInfo.OutputChan <- string(msg.Data)
+	})
+
+	return &Host{Client: c}
 }
 
 type ConnectionConfig struct {
 	CustomToken string
 }
 
-func ConnectToConversationId(appCtx *internal.AppCtx, conversationId string) {
-	c := NewReceiverClient(appCtx.ScreenName, appCtx.IsTest)
-
+func (c *Receiver) ConnectToConversationId(appCtx *internal.AppCtx, conversationId string) {
 	// get the remote host connection info for the given token
 	req, _ := http.NewRequest(http.MethodGet, appCtx.ServerURL+"/get", nil)
 	req.Header.Set("conn-token", conversationId)
@@ -158,6 +204,10 @@ func ConnectToConversationId(appCtx *internal.AppCtx, conversationId string) {
 	if err != nil {
 		panic(err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		panic("bad status received from server, check conversation ID")
+	}
+
 	defer resp.Body.Close()
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -167,27 +217,22 @@ func ConnectToConversationId(appCtx *internal.AppCtx, conversationId string) {
 	offer := webrtc.SessionDescription{}
 	err = json.Unmarshal(b, &offer)
 	if err != nil {
-		fmt.Println("json error")
-		fmt.Println(string(b))
-		panic(err)
+		panic(errors.Wrap(err, "error parsing response from server, fatal"))
 	}
 
 	err = c.SetRemoteDescription(offer)
 	if err != nil {
-		fmt.Println("set remote offer error")
-		panic(err)
+		panic(errors.Wrap(err, "set remote offer error, fatal"))
 	}
 
 	answer, err := c.CreateAnswer(nil)
 	if err != nil {
-		fmt.Println("create answer error")
-		panic(err)
+		panic(errors.Wrap(err, "create answer error"))
 	}
 
 	err = c.SetLocalDescription(answer)
 	if err != nil {
-		fmt.Println("cannot set local description")
-		panic(err)
+		panic(errors.Wrap(err, "cannot set local description"))
 	}
 
 	<-webrtc.GatheringCompletePromise(c.PeerConnection)
@@ -197,16 +242,16 @@ func ConnectToConversationId(appCtx *internal.AppCtx, conversationId string) {
 	req.Header.Set("conn-token", conversationId)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		panic(err)
+		panic(errors.Wrap(err, "could not join conversation"))
 	}
 
 	select {}
 }
 
-func HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig) {
+func (c *Host) HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig) {
 	connectionName := ""
 	if len(connConfig) == 0 {
-		fmt.Println("Would you like to use a custom connection name? (y/n)")
+		fmt.Print("Would you like to use a custom connection name? (y/n): ")
 		reader := bufio.NewReader(os.Stdin)
 		text := ""
 		for {
@@ -215,11 +260,11 @@ func HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig
 			if text == "y" || text == "yes" || text == "n" || text == "no" {
 				break
 			}
-			fmt.Println("Please enter yes or no (y/n)")
+			fmt.Print("Please enter yes or no (y/n): ")
 		}
 		switch text {
 		case "y", "yes":
-			fmt.Println("Please enter the custom connection name now")
+			fmt.Print("Please enter the custom connection name now: ")
 			connectionName, _ = reader.ReadString('\n')
 			connectionName = strings.ReplaceAll(connectionName, "\n", "")
 		default:
@@ -230,8 +275,6 @@ func HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig
 		connectionName = connConfig[0].CustomToken
 	}
 
-	c := NewOfferClient(appCtx.ScreenName, appCtx.IsTest)
-	// Create offer
 	offer, err := c.CreateOffer(nil)
 	if err != nil {
 		panic(err)
@@ -240,27 +283,23 @@ func HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig
 	if err := c.SetLocalDescription(offer); err != nil {
 		panic(err)
 	}
-
-	// Add handlers for setting up the connection.
-	c.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		fmt.Println("New ICE state: ", state)
-	})
-
+	fmt.Println("Gathering ICE Candidates before continuing...")
 	c.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if candidate != nil {
-			go func() { c.c <- *c.LocalDescription() }()
+		if candidate == nil {
+			go func() { c.ICECandidateChan <- *c.LocalDescription() }()
 		}
 	})
 
+	// Client will be available when the first valid ICE
+	// candidate is found and added to the LocalDescription
 	var desc webrtc.SessionDescription
-	time.Sleep(85 * time.Millisecond)
 	select {
-	case m := <-c.c:
+	case m := <-c.ICECandidateChan:
 		desc = m
 	}
-	j := pion.Encode(desc)
-	url := appCtx.ServerURL + "/host"
-	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader([]byte(j)))
+	fmt.Println("Done gathering!")
+
+	req, _ := http.NewRequest(http.MethodPost, appCtx.ServerURL+"/host", bytes.NewReader([]byte(pion.Encode(desc))))
 	if connectionName != "" {
 		req.Header.Set("req-conn-id", connectionName)
 	}
@@ -274,7 +313,7 @@ func HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig
 		panic("status " + resp.Status + " != 200 OK")
 	}
 
-	fmt.Println("connection name: '" + connectionName + "' was accepted by the server, it will be valid for 10 minutes, waiting for connection from peer.")
+	fmt.Println("connection name: '" + connectionName + "' was accepted by the server, it will be valid for 10 minutes, waiting for connection from peer.\n\n")
 
 	info := ""
 	for {

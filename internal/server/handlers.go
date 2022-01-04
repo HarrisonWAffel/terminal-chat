@@ -1,16 +1,12 @@
 package server
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/pion"
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v3"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -24,8 +20,11 @@ type val struct {
 
 type ConnectionMap struct {
 	sync.Mutex
-	m        map[string]val
-	duration time.Duration
+	m                    map[string]val
+	duration             time.Duration
+	TotalTokensCreated   int64
+	TotalTokensCompleted int64
+	TotalTokensExpired   int64
 }
 
 var connectionMap ConnectionMap
@@ -48,6 +47,7 @@ func CreateAndMonitorConnectionMap() {
 					connectionMap.m[key].snd <- webrtc.SessionDescription{SDP: "close"}
 					close(connectionMap.m[key].snd)
 					delete(connectionMap.m, key)
+					connectionMap.TotalTokensExpired++
 				}
 				connectionMap.Unlock()
 			}
@@ -71,25 +71,6 @@ func createNewConnectionToken(token string) string {
 	}
 }
 
-func readBase64Body(r *http.Request) (string, error) {
-	if r.Body == nil {
-		return "", errors.New("nil body")
-	}
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		fmt.Println("could not read body")
-		return "", err
-	}
-	r.Body.Close()
-	var p = make([]byte, len(b))
-	_, err = base64.NewDecoder(base64.StdEncoding, bytes.NewReader(b)).Read(p)
-	if err != nil {
-		fmt.Println("could not decode body")
-		return "", err
-	}
-	return string(p), nil
-}
-
 func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -106,9 +87,10 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 		connectionInfo: sd,
 		snd:            make(chan webrtc.SessionDescription),
 	}
+	connectionMap.TotalTokensCreated++
 	connectionMap.Unlock()
 
-	fmt.Println("connection token: " + r.Header.Get("req-conn-id") + " has been created. Waiting for incoming connection...")
+	fmt.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 	s := connectionMap.m[connToken].snd
@@ -123,6 +105,7 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(j))
 			fmt.Println("Connection information has been shared between parties")
 			connectionMap.Lock()
+			connectionMap.TotalTokensCompleted++
 			delete(connectionMap.m, connToken)
 			connectionMap.Unlock()
 			return
@@ -144,7 +127,8 @@ func GetInfoForToken(w http.ResponseWriter, r *http.Request) {
 		t := connectionMap.m[token].connectionInfo
 		j, err := json.Marshal(t)
 		if err != nil {
-			panic(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		w.Write(j)
 	} else {
@@ -176,6 +160,8 @@ func ConnectWithToken(w http.ResponseWriter, r *http.Request) {
 	c, ok := connectionMap.m[connectionToken]
 	if ok {
 		c.snd <- token
+	} else {
+		w.WriteHeader(http.StatusNotFound)
 	}
 	connectionMap.Unlock()
 }

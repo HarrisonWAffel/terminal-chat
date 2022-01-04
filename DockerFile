@@ -1,0 +1,11 @@
+FROM golang:1.17-alpine
+
+COPY . .
+
+ENV GOPATH=""
+
+EXPOSE 8081
+
+RUN go build main.go
+
+CMD ["./main", "-server", "-server-port=:8081"]
