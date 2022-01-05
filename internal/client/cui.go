@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"github.com/jroimartin/gocui"
+	"github.com/pion/webrtc/v3"
 	"log"
 )
 
@@ -11,6 +12,7 @@ type GUI struct {
 	OutputChan  chan string
 	NetworkChan chan string
 	Username    string
+	PeerConn    *webrtc.PeerConnection
 }
 
 func quit(g *gocui.Gui, v *gocui.View) error {
@@ -109,10 +111,15 @@ func (gui *GUI) layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = "Terminal Chat"
-		fmt.Fprintln(v, "\n\n\nUsername: "+gui.Username)
+
+		stats, bool := gui.PeerConn.GetStats().GetConnectionStats(gui.PeerConn)
+		_ = bool
+		fmt.Fprintln(v, stats.Type+"\n")
+		fmt.Fprintln(v, "Username:\n"+gui.Username+"\n")
+		fmt.Fprintf(v, "# Channels: %d\n", stats.DataChannelsOpened)
 	}
 
-	if v, err := g.SetView("main", sideBarSize, 0, maxX-1, maxY); err != nil {
+	if v, err := g.SetView("main", sideBarSize, 0, maxX-1, maxY-6); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -120,6 +127,7 @@ func (gui *GUI) layout(g *gocui.Gui) error {
 		v.Wrap = true
 		v.Title = "Chat Room"
 		v.Highlight = true
+		v.Autoscroll = true
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
 		fmt.Fprintf(v, "Connection Successful!\n")

@@ -1,14 +1,6 @@
 # Terminal Chat
 
-a Peer to peer terminal chat application featuring end to end encryption and other features. 
-
-### Todo
-
-Better UI 
-
-Token passwords for increased connection security 
-
-Cleaner error handling 
+a Peer to peer terminal chat application featuring end to end AES encryption and other features. 
 
 ### Architecture
 ```

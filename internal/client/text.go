@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bufio"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -9,9 +8,7 @@ import (
 	"fmt"
 	"github.com/pion/webrtc/v3"
 	"io"
-	"os"
 	"strconv"
-	"strings"
 )
 
 func padKey(b []byte) []byte {
@@ -66,28 +63,4 @@ func decryptText(s, keyString string) string {
 		panic(err.Error())
 	}
 	return fmt.Sprintf("%s", plaintext)
-}
-
-func (c *Client) RenderOutput(msg webrtc.DataChannelMessage) {
-	fmt.Printf("\033[2K\r%s\n", decryptText(string(msg.Data), c.Key))
-}
-
-func (c *Client) HandleInput(d *webrtc.DataChannel) {
-	fmt.Println("Connected to Peer!")
-	fmt.Println("Ready to send messages\n\n")
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print(c.AppCtx.ScreenName + ": ")
-		l, err := reader.ReadString('\n')
-		if err != nil {
-			panic(err)
-		}
-
-		l = strings.ReplaceAll(l, "\n", "")
-
-		err = d.SendText(encryptText(c.AppCtx.ScreenName+": "+l, c.Key))
-		if err != nil {
-			panic(err)
-		}
-	}
 }

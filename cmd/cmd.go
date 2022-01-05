@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-func RegisterFlags() (*internal.AppCtx, bool, string) {
+func RegisterFlags() (*internal.AppCtx, bool, string, string) {
 	description := `run the application in server mode. Clients connect to the server to
 change pion connection information between hosts before establishing the p2p connection`
 	runAsServer := flag.Bool("server", false, description)
@@ -19,7 +19,7 @@ change pion connection information between hosts before establishing the p2p con
 	screenName := flag.String("screen-name", "", "The name you wish to use in the conversation")
 	create := flag.Bool("create", false, "set to TRUE if you wish to begin a conversation")
 	connect := flag.String("connect", "", "the connection ID of the other person")
-
+	roomName := flag.String("room-name", "", "immediately supply the room name to be created")
 	flag.Parse()
 
 	if *runAsServer {
@@ -47,5 +47,5 @@ change pion connection information between hosts before establishing the p2p con
 	return &internal.AppCtx{
 		ServerURL:  *serverURL,
 		ScreenName: *screenName,
-	}, *create, *connect
+	}, *create, *connect, *roomName
 }

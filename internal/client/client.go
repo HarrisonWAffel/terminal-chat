@@ -24,11 +24,6 @@ type Client struct {
 	GuiInfo          *GUI
 }
 
-type I interface {
-	HandleInput(d *webrtc.DataChannel)
-	RenderOutput(msg webrtc.DataChannelMessage)
-}
-
 type HostClient interface {
 	HostNewConversation(appCtx *internal.AppCtx, connConfig ...ConnectionConfig)
 }
@@ -85,19 +80,18 @@ func NewReceiverClient(appCtx *internal.AppCtx) ReceivingClient {
 			OutputChan:  make(chan string),
 			NetworkChan: make(chan string),
 			Username:    appCtx.ScreenName,
+			PeerConn:    pc,
 		},
 	}
 
 	// Set the handler for Peer connection state
 	// This will notify you when the peer has connected/disconnected
 	c.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
 		if s == webrtc.PeerConnectionStateFailed {
-			// Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-			// Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-			// Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-			fmt.Println("Peer Connection has gone to failed, exiting")
-			os.Exit(0)
+			c.GuiInfo.OutputChan <- "\n\n***************\nPeer has disconnected. Please exit the application\n***************\n"
+		}
+		if s == webrtc.PeerConnectionStateDisconnected {
+			c.GuiInfo.OutputChan <- "\n\n***************\nPeer has disconnected. Either wait for reconnection or exit application\n***************\n"
 		}
 	})
 
@@ -114,7 +108,7 @@ func NewReceiverClient(appCtx *internal.AppCtx) ReceivingClient {
 				for {
 					select {
 					case msg := <-c.GuiInfo.NetworkChan:
-						d.SendText(msg)
+						d.SendText(encryptText(msg, c.Key))
 					}
 				}
 			}()
@@ -126,7 +120,7 @@ func NewReceiverClient(appCtx *internal.AppCtx) ReceivingClient {
 
 		// Register text message handling
 		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-			c.GuiInfo.OutputChan <- string(msg.Data)
+			c.GuiInfo.OutputChan <- decryptText(string(msg.Data), c.Key)
 		})
 	})
 
@@ -147,6 +141,7 @@ func NewOfferClient(appCtx *internal.AppCtx) HostClient {
 			OutputChan:  make(chan string),
 			NetworkChan: make(chan string),
 			Username:    appCtx.ScreenName,
+			PeerConn:    pc,
 		},
 	}
 
@@ -160,10 +155,11 @@ func NewOfferClient(appCtx *internal.AppCtx) HostClient {
 	})
 
 	c.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
 		if s == webrtc.PeerConnectionStateFailed {
-			fmt.Println("Peer Connection has gone to failed, exiting")
-			os.Exit(0)
+			c.GuiInfo.OutputChan <- "\n\n***************\nPeer has disconnected. Please exit the application\n***************\n"
+		}
+		if s == webrtc.PeerConnectionStateDisconnected {
+			c.GuiInfo.OutputChan <- "\n\n***************\nPeer has disconnected. Either wait for reconnection or exit application\n***************\n"
 		}
 	})
 
@@ -175,7 +171,7 @@ func NewOfferClient(appCtx *internal.AppCtx) HostClient {
 			for {
 				select {
 				case msg := <-c.GuiInfo.NetworkChan:
-					d.SendText(msg)
+					d.SendText(encryptText(msg, c.Key))
 				}
 			}
 		}()
@@ -186,7 +182,7 @@ func NewOfferClient(appCtx *internal.AppCtx) HostClient {
 	})
 
 	d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		c.GuiInfo.OutputChan <- string(msg.Data)
+		c.GuiInfo.OutputChan <- decryptText(string(msg.Data), c.Key)
 	})
 
 	return &Host{Client: c}
