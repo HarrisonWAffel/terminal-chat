@@ -1,6 +1,8 @@
 # Terminal Chat
 
-a Peer to peer terminal chat application featuring end to end AES encryption and other features. 
+a Peer to peer terminal chat application featuring end to end AES encryption, a GUI, and other features.
+
+![example](./screen-shot.png)
 
 ### Architecture
 ```
@@ -25,8 +27,8 @@ a Peer to peer terminal chat application featuring end to end AES encryption and
 This application needs to connect to a dedicated server so that peers may share their
 connection details with one another using custom tokens. The dedicated server only
 holds onto connection details for ten minutes at most, and deletes each token once
-both parties have connected to one another. A Dockerfile for the server has been provided,
-however this server must be exposed to the internet if you wish to have peers from outside of 
+both parties have connected to one another. A Dockerfile for the server has been provided. 
+This server must be exposed to the internet if you wish to have peers from outside of 
 your local network connect to you. To start the dedicated server, compile this repository and run 
 the following command 
 
