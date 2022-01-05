@@ -8,17 +8,20 @@ a Peer to peer terminal chat application featuring end to end AES encryption, a 
 ```
                                                     |          Steps
                --------------------                 |  1. Peer One POSTS token
-       +------>| Discovery Server | <------+        |     and conn info, waits 
+       +------>| Discovery Server | <------+        |     and webRTC info, waits 
        |       --------------------        |        |     
-       |                                   |        |  2. DS Creates Disocvery   
-       v                                   v        |     token
+       |                                   |        |  2. DS Stores webRTC   
+       v                                   v        |     info using token
  ------------                        ------------   |              
- | Peer One | <--------------------> | Peer Two |   |  3. Peer Two POSTS conn 
+ | Peer One | <--------------------> | Peer Two |   |  3. Peer Two POSTS webRTC 
  ------------                        ------------   |     info and gives token
                                                     |   
-                                                    |  4. DS forwards P2 conn
-                                                    |     info to P1 and P2 
-                                                    |     conn info to P1. 
+                                                    |  4. DS forwards P2 webRTC
+                                                    |     info to P1 and P1 
+                                                    |     webRTC info to P2.
+                                                    | 
+                                                    |  5. Clients directly connect 
+                                                    |     to one another  
 ```                        
 
 
@@ -39,18 +42,20 @@ To run without the docker container
 
 To run with the docker container
 ```bash 
-    docker build . -t terminal-chat-server && docker run -p 8081:8081 -d terminal-chat-server 
+docker build . -t terminal-chat-server && docker run -p 8081:8081 -d terminal-chat-server 
 ```
 
 Once a dedicated server has been created peers can begin to connect with one another using the following commands
 
 To create a new connection token use the following command, you can provide a custom token or use a generated UUID as a token
 ```bash 
-    ./terminal-chat -server-url=${SERVER_URL} -create -screen-name=host
+./terminal-chat -server-url=${SERVER_URL} -screen-name=host -create
 ```
 
 To connect to a conversation run the following command 
 ```bash 
-    ./terminal-chat -server-url=${SERVER_URL} -screen-name=guest -connect=${TOKEN}
+./terminal-chat -server-url=${SERVER_URL} -screen-name=guest -connect=${TOKEN}
 ```
 
+If you do not want to provide the `SERVER_URL` each time you run the command you can set 
+the `TERMINAL_CHAT_URL` environment variable equal to the server URL.
