@@ -13,11 +13,11 @@ func main() {
 		if roomName != "" {
 			config = &client.ConnectionConfig{CustomToken: roomName}
 		}
-
-		client.NewOfferClient(ctx).HostNewConversation(ctx, *config)
+		c := client.NewOfferClient(ctx)
+		c.HostNewConversation(ctx, *config)
 	}
 
 	fmt.Println("Attempting to  connect to " + connectionId)
 
-	client.NewReceiverClient(ctx).ConnectToConversationId(ctx, connectionId)
+	client.NewReceiverClient(ctx).ConnectToConversationToken(ctx, connectionId)
 }

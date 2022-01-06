@@ -29,6 +29,10 @@ type ConnectionMap struct {
 
 var connectionMap ConnectionMap
 
+func init() {
+	CreateAndMonitorConnectionMap()
+}
+
 func CreateAndMonitorConnectionMap() {
 	connectionMap.m = make(map[string]val)
 	connectionMap.duration = 1 * time.Minute

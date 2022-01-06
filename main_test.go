@@ -46,7 +46,7 @@ func TestHTTP(t *testing.T) {
 
 	go h.HostNewConversation(httpCtx, client.ConnectionConfig{CustomToken: "testing"})
 	time.Sleep(10 * time.Second) // just needs to be longer than the offer clients ICE candidate gathering
-	go r.ConnectToConversationId(httpCtx, "testing")
+	go r.ConnectToConversationToken(httpCtx, "testing")
 
 	ReceiveMessageOrFailTest(t, recv)
 }
@@ -57,7 +57,7 @@ func TestGRPC(t *testing.T) {
 
 	go h.HostNewConversation(GrpcCtx, client.ConnectionConfig{CustomToken: "testing"})
 	time.Sleep(10 * time.Second) // just needs to be longer than the offer clients ICE candidate gathering
-	go r.ConnectToConversationId(GrpcCtx, "testing")
+	go r.ConnectToConversationToken(GrpcCtx, "testing")
 
 	ReceiveMessageOrFailTest(t, recv)
 }
@@ -71,7 +71,7 @@ func TestMultipleHTTP(t *testing.T) {
 			r := NewHTTPTestReceiverClient(httpCtx)
 			go h1.HostNewConversation(httpCtx, client.ConnectionConfig{CustomToken: fmt.Sprintf("test%d", i)})
 			time.Sleep(10 * time.Second)
-			go r.ConnectToConversationId(httpCtx, fmt.Sprintf("test%d", i))
+			go r.ConnectToConversationToken(httpCtx, fmt.Sprintf("test%d", i))
 			ReceiveMessageOrFailTest(t, recv1)
 			wg.Done()
 		}(i, wg)
@@ -91,8 +91,8 @@ func TestMutlipleGRPC(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 
-	go r.ConnectToConversationId(GrpcCtx, "test1")
-	go r2.ConnectToConversationId(GrpcCtx, "test2")
+	go r.ConnectToConversationToken(GrpcCtx, "test1")
+	go r2.ConnectToConversationToken(GrpcCtx, "test2")
 
 	ReceiveMessageOrFailTest(t, recv1)
 	ReceiveMessageOrFailTest(t, recv2)

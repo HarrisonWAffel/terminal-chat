@@ -39,13 +39,11 @@ func StartHTTPServer(ctx *AppCtx) {
 		}
 		w.Write(j)
 	})
-	CreateAndMonitorConnectionMap()
 
 	panic(http.ListenAndServe(ctx.ServerCtx.Port, m))
 }
 
 func StartGRPCServer(ctx *AppCtx) {
-	// todo SSL authentication (?)
 	// start grpc server
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s", ctx.ServerCtx.Port))
 	if err != nil {
