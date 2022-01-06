@@ -59,3 +59,27 @@ To connect to a conversation run the following command
 
 If you do not want to provide the `SERVER_URL` each time you run the command you can set 
 the `TERMINAL_CHAT_URL` environment variable equal to the server URL.
+
+flags
+
+```bash
+Usage of ./terminal-chat:
+  -connect string
+        the room ID created by the other peer you wish to connect to
+  -create
+        pass this flag if you wish to begin a conversation and wait for a peer to connect
+  -grpc
+        pass this flag to start a gRPC server
+  -room-name string
+        immediately supply the room name to be created
+  -screen-name string
+        The name you wish to use in the conversation
+  -server
+        run the application in server mode. Clients connect to the server to
+        change pion connection information between hosts before establishing the p2p connection
+  -server-port string
+        The server port that should be used when creating a server, should begin with : (e.g. :8080)  (default ":8080")
+  -server-url string
+        The URL of the server you want to connect to communicate p2p connection info with another client
+
+```

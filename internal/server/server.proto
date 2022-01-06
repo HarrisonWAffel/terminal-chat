@@ -1,0 +1,27 @@
+syntax = "proto3";
+option go_package = "github.com/HarrisonWAffel/server";
+
+service Discovery {
+  // client posts connection info to server, reads returned stream to get
+  // connection info of second client
+  rpc PostConnectionInfo(connectionInfo) returns (stream connectionInfo);
+
+  // RPC to get the webRTC information of the host, used to craft
+  // peer response
+  rpc GetConnectionInfoForToken(connectionToken) returns (connectionInfo);
+
+  // RPC to send peer response to host, allowing both ends
+  // to initiate a peer-to-peer connection
+  rpc JoinConversation(connectionInfo) returns (Empty);
+}
+
+message Empty {}
+
+message connectionToken {
+  string token = 1;
+}
+
+message connectionInfo {
+  string ConnInfoBase64 = 1;
+  connectionToken token = 2;
+}

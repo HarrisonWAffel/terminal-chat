@@ -2,11 +2,22 @@ package server
 
 import (
 	"encoding/json"
-	"github.com/HarrisonWAffel/terminal-chat/internal"
+	"fmt"
+	"google.golang.org/grpc"
+	"log"
+	"net"
 	"net/http"
 )
 
-func StartServer(ctx *internal.AppCtx) {
+func StartServer(ctx *AppCtx) {
+	if ctx.GRPCEnabled {
+		StartGRPCServer(ctx)
+	} else {
+		StartHTTPServer(ctx)
+	}
+}
+
+func StartHTTPServer(ctx *AppCtx) {
 	m := http.DefaultServeMux
 	ctx.Log.Println("Server listening on " + ctx.ServerCtx.Port)
 	m.HandleFunc("/host", CreateConnectionToken)
@@ -31,4 +42,18 @@ func StartServer(ctx *internal.AppCtx) {
 	CreateAndMonitorConnectionMap()
 
 	panic(http.ListenAndServe(ctx.ServerCtx.Port, m))
+}
+
+func StartGRPCServer(ctx *AppCtx) {
+	// todo SSL authentication (?)
+	// start grpc server
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s", ctx.ServerCtx.Port))
+	if err != nil {
+		log.Fatalf("grpc server failed to listen: %v", err)
+	}
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	RegisterDiscoveryServer(grpcServer, &DiscoveryServerImpl{UnimplementedDiscoveryServer{}})
+	ctx.Log.Println("GRPC Server listening on ", ctx.ServerCtx.Port)
+	panic(grpcServer.Serve(lis))
 }

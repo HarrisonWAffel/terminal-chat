@@ -9,13 +9,15 @@ import (
 func main() {
 	ctx, create, connectionId, roomName := cmd.RegisterFlags()
 	if create {
-		if roomName == "" {
-			client.NewOfferClient(ctx).HostNewConversation(ctx)
-		} else {
-			client.NewOfferClient(ctx).HostNewConversation(ctx, client.ConnectionConfig{CustomToken: roomName})
+		var config *client.ConnectionConfig
+		if roomName != "" {
+			config = &client.ConnectionConfig{CustomToken: roomName}
 		}
-	} else {
-		fmt.Println("Attempting to  connect to " + connectionId)
-		client.NewReceiverClient(ctx).ConnectToConversationId(ctx, connectionId)
+
+		client.NewOfferClient(ctx).HostNewConversation(ctx, *config)
 	}
+
+	fmt.Println("Attempting to  connect to " + connectionId)
+
+	client.NewReceiverClient(ctx).ConnectToConversationId(ctx, connectionId)
 }

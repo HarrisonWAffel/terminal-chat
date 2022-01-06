@@ -88,12 +88,12 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 		snd:            make(chan webrtc.SessionDescription),
 	}
 	connectionMap.TotalTokensCreated++
+	s := connectionMap.m[connToken].snd
 	connectionMap.Unlock()
 
 	fmt.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
-	s := connectionMap.m[connToken].snd
 	for {
 		select {
 		case msg := <-s:

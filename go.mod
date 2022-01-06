@@ -7,9 +7,12 @@ require (
 	github.com/jroimartin/gocui v0.5.0
 	github.com/pion/webrtc/v3 v3.1.7
 	github.com/pkg/errors v0.9.1
+	google.golang.org/grpc v1.43.0
+	google.golang.org/protobuf v1.25.0
 )
 
 require (
+	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/pion/datachannel v1.5.0 // indirect
@@ -31,5 +34,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
 	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
+	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 )
