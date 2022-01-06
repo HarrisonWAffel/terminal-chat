@@ -27,9 +27,9 @@ func (d *DiscoveryServerImpl) PostConnectionInfo(connInfo *ConnectionInfo, ds Di
 		snd:            make(chan webrtc.SessionDescription),
 	}
 	connectionMap.TotalTokensCreated++
+	s := connectionMap.m[connToken].snd
 	connectionMap.Unlock()
 
-	s := connectionMap.m[connToken].snd
 	for {
 		select {
 		case msg := <-s:
