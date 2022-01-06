@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
 	"github.com/pion/webrtc/v3"
-	"google.golang.org/grpc"
+	"net/http"
 	"os"
+	"strings"
 )
 
 type Client struct {
@@ -47,19 +48,25 @@ func EnsureServerMode(ctx *server.AppCtx) {
 			fmt.Println("\n\nremote server is not running in gRPC mode, omit '-grpc' flag")
 			os.Exit(1)
 		}
+	} else {
+		if serverMode != "HTTP" {
+			fmt.Println("\n\nremote server is not running in HTTP mode, rerun command with the '-grpc' flag")
+			os.Exit(1)
+		}
 	}
-
-	fmt.Println("\n\nremote server is not running in HTTP mode, rerun command with the '-grpc' flag")
-	os.Exit(1)
 }
 
 func GetServerMode(ctx *server.AppCtx) string {
-	c, err := grpc.Dial(ctx.ServerURL, grpc.WithInsecure())
-	if err != nil {
-		return "HTTP"
+	if !strings.Contains(ctx.ServerURL, "http://") {
+		ctx.ServerURL = "https://" + ctx.ServerURL
 	}
-	c.Close()
-	return "gRPC"
+
+	resp, err := http.Get(ctx.ServerURL + "/get")
+	if err != nil {
+		return "gRPC"
+	}
+	_ = resp
+	return "HTTP"
 }
 
 func newOfferClient(ctx *server.AppCtx) *Client {

@@ -165,7 +165,10 @@ func (c *HTTPHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 	}
 	fmt.Println("Done gathering!")
 
-	req, _ := http.NewRequest(http.MethodPost, appCtx.ServerURL+"/host", bytes.NewReader([]byte(pion.Encode(desc))))
+	req, err := http.NewRequest(http.MethodPost, appCtx.ServerURL+"/host", bytes.NewReader([]byte(pion.Encode(desc))))
+	if err != nil {
+		panic(err)
+	}
 	if connectionName != "" {
 		req.Header.Set("req-conn-id", connectionName)
 	}
