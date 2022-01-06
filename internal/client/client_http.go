@@ -62,10 +62,10 @@ type ConnectionConfig struct {
 	CustomToken string
 }
 
-func (c *HTTPReceiver) ConnectToConversationId(appCtx *server.AppCtx, conversationId string) {
+func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, conversationToken string) {
 	// get the remote host connection info for the given token
 	req, _ := http.NewRequest(http.MethodGet, appCtx.ServerURL+"/get", nil)
-	req.Header.Set("conn-token", conversationId)
+	req.Header.Set("conn-token", conversationToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		panic(err)
@@ -105,7 +105,7 @@ func (c *HTTPReceiver) ConnectToConversationId(appCtx *server.AppCtx, conversati
 
 	connInfo := pion.Encode(c.LocalDescription())
 	req, _ = http.NewRequest(http.MethodPost, appCtx.ServerURL+"/join", bytes.NewReader([]byte(connInfo)))
-	req.Header.Set("conn-token", conversationId)
+	req.Header.Set("conn-token", conversationToken)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		panic(errors.Wrap(err, "could not join conversation"))

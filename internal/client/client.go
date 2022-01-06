@@ -20,7 +20,7 @@ type HostClient interface {
 }
 
 type ReceivingClient interface {
-	ConnectToConversationId(appCtx *server.AppCtx, conversationId string)
+	ConnectToConversationToken(appCtx *server.AppCtx, conversationToken string)
 }
 
 func NewOfferClient(ctx *server.AppCtx) HostClient {

@@ -11,7 +11,7 @@ import (
 
 func RegisterFlags() (*server.AppCtx, bool, string, string) {
 	description := `run the application in server mode. Clients connect to the server to
-change pion connection information between hosts before establishing the p2p connection`
+exchange pion connection information between hosts before establishing the p2p connection`
 	runAsServer := flag.Bool("server", false, description)
 	serverPort := flag.String("server-port", ":8080", "The server port that should be used, should begin with : (e.g. :8080) ")
 	serverURL := flag.String("server-url", "", "The URL of the server you want to connect to communicate p2p connection info with another client")

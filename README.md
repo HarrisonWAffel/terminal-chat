@@ -1,6 +1,6 @@
 # Terminal Chat
 
-a Peer to peer terminal chat application featuring end to end AES encryption, a GUI, and other features.
+a Peer to peer terminal chat application featuring end to end AES encryption, gRPC, a GUI, and other features.
 
 ![example](./screen-shot.png)
 
@@ -11,16 +11,16 @@ a Peer to peer terminal chat application featuring end to end AES encryption, a 
        +------>| Discovery Server | <------+        |     and webRTC info, waits 
        |       --------------------        |        |     
        |                                   |        |  2. DS Stores webRTC   
-       v                                   v        |     info using token
- ------------                        ------------   |              
- | Peer One | <--------------------> | Peer Two |   |  3. Peer Two POSTS webRTC 
- ------------                        ------------   |     info and gives token
-                                                    |   
-                                                    |  4. DS forwards P2 webRTC
-                                                    |     info to P1 and P1 
-                                                    |     webRTC info to P2.
-                                                    | 
-                                                    |  5. Clients directly connect 
+       |                                   |        |     info using token
+       |                                   |        |              
+       |                                   |        |  3. Peer Two POSTS webRTC 
+       |                                   |        |     info and gives token
+       |                                   |        |   
+       |                                   |        |  4. DS forwards P2 webRTC
+       v                                   v        |     info to P1 and P1 
+ ------------                        ------------   |     webRTC info to P2.
+ | Peer One | <--------------------> | Peer Two |   | 
+ ------------                        ------------   |  5. Clients directly connect 
                                                     |     to one another  
 ```                        
 
@@ -35,12 +35,17 @@ This server must be exposed to the internet if you wish to have peers from outsi
 your local network connect to you. To start the dedicated server, compile this repository and run 
 the following command 
 
-To run without the docker container
+To run without a docker container
 ```bash
 ./terminal-chat -server -server-port=":8081"
 ```
 
-To run with the docker container
+To run without a docker container as a gRPC server (**Note that clients must also pass the `-grpc` flag when connecting to a grpc server**)
+```bash
+./terminal-chat -server -server-port=":8081" -grpc
+```
+
+To run with a docker container
 ```bash 
 docker build . -t terminal-chat-server && docker run -p 8081:8081 -d terminal-chat-server 
 ```
@@ -49,7 +54,7 @@ Once a dedicated server has been created peers can begin to connect with one ano
 
 To create a new connection token use the following command, you can provide a custom token or use a generated UUID as a token
 ```bash 
-./terminal-chat -server-url=${SERVER_URL} -screen-name=host -create
+./terminal-chat -server-url=${SERVER_URL} -screen-name=host -create -room-name=${TOKEN}
 ```
 
 To connect to a conversation run the following command 
@@ -57,7 +62,7 @@ To connect to a conversation run the following command
 ./terminal-chat -server-url=${SERVER_URL} -screen-name=guest -connect=${TOKEN}
 ```
 
-If you do not want to provide the `SERVER_URL` each time you run the command you can set 
+If you do not want to provide the `-server-url` each time you run the command you can set 
 the `TERMINAL_CHAT_URL` environment variable equal to the server URL.
 
 flags
@@ -76,7 +81,7 @@ Usage of ./terminal-chat:
         The name you wish to use in the conversation
   -server
         run the application in server mode. Clients connect to the server to
-        change pion connection information between hosts before establishing the p2p connection
+        exchange pion connection information between hosts before establishing the p2p connection
   -server-port string
         The server port that should be used when creating a server, should begin with : (e.g. :8080)  (default ":8080")
   -server-url string
