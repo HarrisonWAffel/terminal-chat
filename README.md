@@ -50,6 +50,8 @@ To run with a docker container
 docker build . -t terminal-chat-server && docker run -p 8081:8081 -d terminal-chat-server 
 ```
 
+Please note that when hosting an HTTP server you should all timeouts to 10 **minutes** to ensure room hosts can receive peer connection information.
+
 Once a dedicated server has been created peers can begin to connect with one another using the following commands
 
 To create a new connection token use the following command, you can provide a custom token or use a generated UUID as a token

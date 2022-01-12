@@ -95,9 +95,11 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 	s := connectionMap.m[connToken].snd
 	connectionMap.Unlock()
 
-	fmt.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
+
+	fmt.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
+
 	for {
 		select {
 		case msg := <-s:
@@ -107,6 +109,7 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 			}
 			j := pion.Encode(msg)
 			w.Write([]byte(j))
+			w.(http.Flusher).Flush()
 			fmt.Println("Connection information has been shared between parties")
 			connectionMap.Lock()
 			connectionMap.TotalTokensCompleted++

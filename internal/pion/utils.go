@@ -16,10 +16,10 @@ func Encode(obj interface{}) string {
 func Decode(in string, obj interface{}) {
 	b, err := base64.StdEncoding.DecodeString(in)
 	if err != nil {
-		panic(err)
+		panic("decode error: " + err.Error())
 	}
 	err = json.Unmarshal(b, obj)
 	if err != nil {
-		panic(err)
+		panic("decode error: " + err.Error())
 	}
 }

@@ -23,5 +23,5 @@ message connectionToken {
 
 message connectionInfo {
   string ConnInfoBase64 = 1;
-  connectionToken token = 2;
+  string token = 2;
 }

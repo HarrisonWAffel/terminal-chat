@@ -29,7 +29,6 @@ func NewGRPCOfferClient(appCtx *server.AppCtx) HostClient {
 
 func (c *GRPCReceiver) ConnectToConversationToken(appCtx *server.AppCtx, ConversationToken string) {
 	// get the remote host connection info for the given token
-
 	resp, err := appCtx.DiscoveryClient.GetConnectionInfoForToken(context.Background(), &server.ConnectionToken{Token: ConversationToken})
 	if err != nil {
 		panic(errors.Wrap(err, "error parsing response from server, fatal"))
@@ -59,7 +58,7 @@ func (c *GRPCReceiver) ConnectToConversationToken(appCtx *server.AppCtx, Convers
 	<-webrtc.GatheringCompletePromise(c.PeerConnection)
 
 	connInfo := pion.Encode(c.LocalDescription())
-	x := server.ConnectionInfo{ConnInfoBase64: connInfo, Token: &server.ConnectionToken{Token: ConversationToken}}
+	x := server.ConnectionInfo{ConnInfoBase64: connInfo, Token: ConversationToken}
 	_, err = appCtx.DiscoveryClient.JoinConversation(context.Background(), &x)
 	if err != nil {
 		panic(err)
@@ -99,12 +98,11 @@ func (c *GRPCHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 	case m := <-c.ICECandidateChan:
 		desc = m
 	}
-
 	fmt.Println("Done gathering!")
 
 	recv, err := appCtx.DiscoveryClient.PostConnectionInfo(context.Background(), &server.ConnectionInfo{
 		ConnInfoBase64: pion.Encode(desc),
-		Token:          &server.ConnectionToken{Token: connectionName},
+		Token:          connectionName,
 	})
 	if err != nil {
 		panic(err)
@@ -118,8 +116,6 @@ func (c *GRPCHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 		if err == nil {
 			info = b.ConnInfoBase64
 			break
-		} else {
-			panic(err)
 		}
 	}
 

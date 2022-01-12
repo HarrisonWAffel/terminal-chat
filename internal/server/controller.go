@@ -19,7 +19,7 @@ func StartServer(ctx *AppCtx) {
 
 func StartHTTPServer(ctx *AppCtx) {
 	m := http.DefaultServeMux
-	ctx.Log.Println("Server listening on " + ctx.ServerCtx.Port)
+	ctx.Log.Println("HTTP Server listening on " + ctx.ServerCtx.Port)
 	m.HandleFunc("/host", CreateConnectionToken)
 	m.HandleFunc("/get", GetInfoForToken)
 	m.HandleFunc("/join", ConnectWithToken)
@@ -51,7 +51,7 @@ func StartGRPCServer(ctx *AppCtx) {
 	}
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	RegisterDiscoveryServer(grpcServer, &DiscoveryServerImpl{UnimplementedDiscoveryServer{}})
+	RegisterDiscoveryServer(grpcServer, &DiscoveryServerImpl{})
 	ctx.Log.Println("GRPC Server listening on ", ctx.ServerCtx.Port)
 	panic(grpcServer.Serve(lis))
 }

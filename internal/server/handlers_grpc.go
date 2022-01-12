@@ -18,7 +18,7 @@ type DiscoveryServerImpl struct {
 func (d *DiscoveryServerImpl) PostConnectionInfo(connInfo *ConnectionInfo, ds Discovery_PostConnectionInfoServer) error {
 	sd := webrtc.SessionDescription{}
 	pion.Decode(connInfo.ConnInfoBase64, &sd)
-	connToken := createNewConnectionToken(connInfo.Token.GetToken())
+	connToken := createNewConnectionToken(connInfo.GetToken())
 
 	connectionMap.Lock()
 	connectionMap.m[connToken] = val{
@@ -38,7 +38,7 @@ func (d *DiscoveryServerImpl) PostConnectionInfo(connInfo *ConnectionInfo, ds Di
 				return nil
 			}
 			j := pion.Encode(msg)
-			err := ds.Send(&ConnectionInfo{ConnInfoBase64: j, Token: &ConnectionToken{Token: connToken}})
+			err := ds.Send(&ConnectionInfo{ConnInfoBase64: j, Token: connToken})
 			if err != nil {
 				fmt.Println("err: ", err.Error())
 			} else {
@@ -64,7 +64,7 @@ func (d *DiscoveryServerImpl) GetConnectionInfoForToken(ctx context.Context, cTo
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("%d", http.StatusInternalServerError))
 		}
-		return &ConnectionInfo{ConnInfoBase64: string(j), Token: cToken}, nil
+		return &ConnectionInfo{ConnInfoBase64: string(j), Token: cToken.GetToken()}, nil
 	}
 
 	return nil, errors.New(fmt.Sprintf("%d", http.StatusNotFound))
@@ -77,11 +77,11 @@ func (d *DiscoveryServerImpl) JoinConversation(ctx context.Context, cToken *Conn
 	connectionMap.Lock()
 	defer connectionMap.Unlock()
 
-	c, ok := connectionMap.m[cToken.GetToken().GetToken()]
+	c, ok := connectionMap.m[cToken.GetToken()]
 	if ok {
 		c.snd <- token
 	} else {
-		return &Empty{}, errors.New("conversation id not found, token = " + cToken.GetToken().GetToken())
+		return &Empty{}, errors.New("conversation id not found, token = " + cToken.GetToken())
 	}
 
 	return &Empty{}, nil

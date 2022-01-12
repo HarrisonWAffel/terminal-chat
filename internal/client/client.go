@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
 	"github.com/pion/webrtc/v3"
-	"net/http"
 	"os"
-	"strings"
 )
 
 type Client struct {
@@ -26,7 +24,6 @@ type ReceivingClient interface {
 }
 
 func NewOfferClient(ctx *server.AppCtx) HostClient {
-	EnsureServerMode(ctx)
 	if ctx.GRPCEnabled {
 		return NewGRPCOfferClient(ctx)
 	}
@@ -34,39 +31,10 @@ func NewOfferClient(ctx *server.AppCtx) HostClient {
 }
 
 func NewReceiverClient(ctx *server.AppCtx) ReceivingClient {
-	EnsureServerMode(ctx)
 	if ctx.GRPCEnabled {
 		return NewGRPCReceiverClient(ctx)
 	}
 	return NewHTTPReceiverClient(ctx)
-}
-
-func EnsureServerMode(ctx *server.AppCtx) {
-	serverMode := GetServerMode(ctx)
-	if ctx.GRPCEnabled {
-		if serverMode != "gRPC" {
-			fmt.Println("\n\nremote server is not running in gRPC mode, omit '-grpc' flag")
-			os.Exit(1)
-		}
-	} else {
-		if serverMode != "HTTP" {
-			fmt.Println("\n\nremote server is not running in HTTP mode, rerun command with the '-grpc' flag")
-			os.Exit(1)
-		}
-	}
-}
-
-func GetServerMode(ctx *server.AppCtx) string {
-	if !strings.Contains(ctx.ServerURL, "http://") {
-		ctx.ServerURL = "https://" + ctx.ServerURL
-	}
-
-	resp, err := http.Get(ctx.ServerURL + "/get")
-	if err != nil {
-		return "gRPC"
-	}
-	_ = resp
-	return "HTTP"
 }
 
 func newOfferClient(ctx *server.AppCtx) *Client {
@@ -160,7 +128,6 @@ func newReceiverClient(ctx *server.AppCtx) *Client {
 
 	// Register data channel creation handling
 	c.OnDataChannel(func(d *webrtc.DataChannel) {
-		fmt.Printf("DataChannel %s-%d open\n\n", d.Label(), d.ID())
 		if c.Key == "" {
 			setKey(c, d)
 		}

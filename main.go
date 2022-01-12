@@ -10,11 +10,12 @@ func main() {
 	ctx, create, connectionId, roomName := cmd.RegisterFlags()
 	if create {
 		var config *client.ConnectionConfig
+		c := client.NewOfferClient(ctx)
 		if roomName != "" {
 			config = &client.ConnectionConfig{CustomToken: roomName}
+			c.HostNewConversation(ctx, *config)
 		}
-		c := client.NewOfferClient(ctx)
-		c.HostNewConversation(ctx, *config)
+		c.HostNewConversation(ctx)
 	}
 
 	fmt.Println("Attempting to  connect to " + connectionId)

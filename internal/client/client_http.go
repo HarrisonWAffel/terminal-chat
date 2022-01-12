@@ -1,19 +1,16 @@
 package client
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/pion"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
-	"github.com/google/uuid"
 	"github.com/pion/webrtc/v3"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strings"
+	"time"
 )
 
 type HTTPHost struct {
@@ -64,6 +61,7 @@ type ConnectionConfig struct {
 
 func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, conversationToken string) {
 	// get the remote host connection info for the given token
+	fmt.Println(appCtx.ServerURL + "/get")
 	req, _ := http.NewRequest(http.MethodGet, appCtx.ServerURL+"/get", nil)
 	req.Header.Set("conn-token", conversationToken)
 	resp, err := http.DefaultClient.Do(req)
@@ -71,7 +69,7 @@ func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, convers
 		panic(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		panic("bad status received from server, check conversation ID")
+		panic("bad status received from server, " + resp.Status + ", check conversation ID")
 	}
 
 	defer resp.Body.Close()
@@ -79,7 +77,6 @@ func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, convers
 	if err != nil {
 		panic(err)
 	}
-
 	offer := webrtc.SessionDescription{}
 	err = json.Unmarshal(b, &offer)
 	if err != nil {
@@ -100,10 +97,11 @@ func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, convers
 	if err != nil {
 		panic(errors.Wrap(err, "cannot set local description"))
 	}
-
+	fmt.Println("Gathering ICE Candidates")
 	<-webrtc.GatheringCompletePromise(c.PeerConnection)
-
+	fmt.Println("Done gathering ICE candidates")
 	connInfo := pion.Encode(c.LocalDescription())
+	fmt.Println("Attempting to join ", conversationToken)
 	req, _ = http.NewRequest(http.MethodPost, appCtx.ServerURL+"/join", bytes.NewReader([]byte(connInfo)))
 	req.Header.Set("conn-token", conversationToken)
 	resp, err = http.DefaultClient.Do(req)
@@ -117,26 +115,7 @@ func (c *HTTPReceiver) ConnectToConversationToken(appCtx *server.AppCtx, convers
 func (c *HTTPHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...ConnectionConfig) {
 	connectionName := ""
 	if len(connConfig) == 0 {
-		fmt.Print("Would you like to use a custom connection name? (y/n): ")
-		reader := bufio.NewReader(os.Stdin)
-		text := ""
-		for {
-			t, _ := reader.ReadString('\n')
-			text = strings.ReplaceAll(strings.ToLower(t), "\n", "")
-			if text == "y" || text == "yes" || text == "n" || text == "no" {
-				break
-			}
-			fmt.Print("Please enter yes or no (y/n): ")
-		}
-		switch text {
-		case "y", "yes":
-			fmt.Print("Please enter the custom connection name now: ")
-			connectionName, _ = reader.ReadString('\n')
-			connectionName = strings.ReplaceAll(connectionName, "\n", "")
-		default:
-			connectionName = uuid.New().String()
-			break
-		}
+		connectionName = ReadCustomConnectionName()
 	} else {
 		connectionName = connConfig[0].CustomToken
 	}
@@ -149,6 +128,7 @@ func (c *HTTPHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 	if err := c.SetLocalDescription(offer); err != nil {
 		panic(err)
 	}
+
 	fmt.Println("Gathering ICE Candidates before continuing...")
 	c.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
@@ -173,18 +153,24 @@ func (c *HTTPHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 		req.Header.Set("req-conn-id", connectionName)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
+	client := http.Client{
+		CheckRedirect: nil,
+		Jar:           nil,
+		Timeout:       0,
 	}
-	defer resp.Body.Close()
+
+	info := ""
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err.Error() + ": is this a gRPC server?")
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		panic("status " + resp.Status + " != 200 OK")
 	}
 
 	fmt.Println("connection name: '" + connectionName + "' was accepted by the server, it will be valid for 10 minutes, waiting for connection from peer.\n\n")
 
-	info := ""
 	for {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
@@ -193,6 +179,7 @@ func (c *HTTPHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 				break
 			}
 		}
+		time.Sleep(1 * time.Second)
 	}
 
 	if info == "token timed out" {
