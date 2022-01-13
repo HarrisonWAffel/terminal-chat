@@ -6,6 +6,7 @@ import (
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
 	"github.com/pion/webrtc/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"os"
 	"sync"
@@ -33,7 +34,7 @@ var GrpcCtx = &server.AppCtx{
 func init() {
 	go server.StartHTTPServer(httpCtx)
 	go server.StartGRPCServer(GrpcCtx)
-	conn, err := grpc.Dial(GrpcCtx.ServerCtx.Port, grpc.WithInsecure())
+	conn, err := grpc.Dial(GrpcCtx.ServerCtx.Port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
@@ -65,8 +66,8 @@ func TestGRPC(t *testing.T) {
 func TestMultipleHTTP(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	for i := 0; i < 25; i++ {
+		wg.Add(1)
 		go func(i int, wg *sync.WaitGroup) {
-			wg.Add(1)
 			h1, recv1 := NewHTTPTestHostClient(httpCtx)
 			r := NewHTTPTestReceiverClient(httpCtx)
 			go h1.HostNewConversation(httpCtx, client.ConnectionConfig{CustomToken: fmt.Sprintf("test%d", i)})

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"os"
 )
@@ -46,7 +47,7 @@ exchange pion connection information between hosts before establishing the p2p c
 	}
 
 	if *enableGrpc {
-		conn, err := grpc.Dial(*serverURL, grpc.WithInsecure())
+		conn, err := grpc.Dial(*serverURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			panic(err)
 		}
