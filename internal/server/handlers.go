@@ -6,6 +6,7 @@ import (
 	"github.com/HarrisonWAffel/terminal-chat/internal/pion"
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v3"
+	"github.com/pkg/errors"
 	"io"
 	"net/http"
 	"sync"
@@ -25,13 +26,18 @@ type ConnectionMap struct {
 	TotalTokensCreated   int64
 	TotalTokensCompleted int64
 	TotalTokensExpired   int64
+	TotalTokensFailed    int64
 }
 
 var connectionMap ConnectionMap
 
+func init() {
+	CreateAndMonitorConnectionMap()
+}
+
 func CreateAndMonitorConnectionMap() {
 	connectionMap.m = make(map[string]val)
-	connectionMap.duration = 1 * time.Minute
+	connectionMap.duration = 9 * time.Minute
 	go func() {
 		for {
 			select {
@@ -50,35 +56,52 @@ func CreateAndMonitorConnectionMap() {
 					connectionMap.TotalTokensExpired++
 				}
 				connectionMap.Unlock()
+				if len(outDatedKeys) > 0 {
+					fmt.Println(time.Now().Format(time.RFC1123)+" | Map Cleanup Done!", len(outDatedKeys), "keys removed")
+				}
 			}
 		}
 	}()
+}
+
+func removeRoomFromMap(roomName string) error {
+	connectionMap.Lock()
+	defer connectionMap.Unlock()
+	_, ok := connectionMap.m[roomName]
+	if !ok {
+		return errors.New("no such room")
+	}
+	delete(connectionMap.m, roomName)
+	return nil
 }
 
 func createNewConnectionToken(token string) string {
 	if token == "" {
 		token = uuid.New().String()
 	}
+	connectionMap.Lock()
+	defer connectionMap.Unlock()
 	for {
-		connectionMap.Lock()
 		_, ok := connectionMap.m[token]
 		if !ok {
-			connectionMap.Unlock()
 			return token
 		}
 		token = uuid.New().String()
-		connectionMap.Unlock()
 	}
 }
 
-func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
+func CreateConnectionToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	sd := webrtc.SessionDescription{}
-	pion.Decode(string(b), &sd)
+	err = pion.Decode(string(b), &sd)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	connToken := createNewConnectionToken(r.Header.Get("req-conn-id"))
 	connectionMap.Lock()
@@ -88,22 +111,35 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 		snd:            make(chan webrtc.SessionDescription),
 	}
 	connectionMap.TotalTokensCreated++
+	s := connectionMap.m[connToken].snd
 	connectionMap.Unlock()
 
-	fmt.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
-	s := connectionMap.m[connToken].snd
+
+	ctx.Log.Println("connection token: '" + r.Header.Get("req-conn-id") + "' has been created. Waiting for incoming connection...")
+
 	for {
 		select {
 		case msg := <-s:
 			if msg.SDP == "close" {
+				ctx.Log.Println("Connection information for room-name '" + r.Header.Get("req-conn-id") + "' has expired.")
 				w.Write([]byte("token timed out"))
 				return
 			}
-			j := pion.Encode(msg)
+			j, err := pion.Encode(msg)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				ctx.Log.Println("unable to encode message from receiving peer, room-name " + r.Header.Get("req-conn-id") + " will be cleaned up")
+				err = removeRoomFromMap(r.Header.Get("req-conn-id"))
+				if err != nil {
+					panic("could not remove room from map: " + err.Error())
+				}
+				return
+			}
 			w.Write([]byte(j))
-			fmt.Println("Connection information has been shared between parties")
+			w.(http.Flusher).Flush()
+			ctx.Log.Println("Connection information has been shared between parties")
 			connectionMap.Lock()
 			connectionMap.TotalTokensCompleted++
 			delete(connectionMap.m, connToken)
@@ -114,7 +150,7 @@ func CreateConnectionToken(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func GetInfoForToken(w http.ResponseWriter, r *http.Request) {
+func GetInfoForToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("conn-token")
 	if token == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -136,9 +172,9 @@ func GetInfoForToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func ConnectWithToken(w http.ResponseWriter, r *http.Request) {
-	connectionToken := r.Header.Get("conn-token")
-	if connectionToken == "" {
+func ConnectWithToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
+	roomName := r.Header.Get("conn-token")
+	if roomName == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -154,12 +190,17 @@ func ConnectWithToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := webrtc.SessionDescription{}
-	pion.Decode(string(b), &token)
+	err = pion.Decode(string(b), &token)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	connectionMap.Lock()
-	c, ok := connectionMap.m[connectionToken]
+	c, ok := connectionMap.m[roomName]
 	if ok {
 		c.snd <- token
+		ctx.Log.Println("A peer has connected to", roomName)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 	}

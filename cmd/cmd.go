@@ -3,29 +3,31 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"github.com/HarrisonWAffel/terminal-chat/internal"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"os"
 )
 
-func RegisterFlags() (*internal.AppCtx, bool, string, string) {
+func RegisterFlags() (*server.AppCtx, bool, string) {
 	description := `run the application in server mode. Clients connect to the server to
-change pion connection information between hosts before establishing the p2p connection`
+exchange pion connection information between hosts before establishing the p2p connection`
 	runAsServer := flag.Bool("server", false, description)
 	serverPort := flag.String("server-port", ":8080", "The server port that should be used, should begin with : (e.g. :8080) ")
 	serverURL := flag.String("server-url", "", "The URL of the server you want to connect to communicate p2p connection info with another client")
+	enableGrpc := flag.Bool("grpc", false, "pass this flag to start or connect to a gRPC server")
 
 	screenName := flag.String("screen-name", "", "The name you wish to use in the conversation")
-	create := flag.Bool("create", false, "set to TRUE if you wish to begin a conversation")
-	connect := flag.String("connect", "", "the connection ID of the other person")
-	roomName := flag.String("room-name", "", "immediately supply the room name to be created")
+	create := flag.Bool("create", false, "pass this flag if you wish to begin a conversation and wait for a peer to connect")
+	roomName := flag.String("room-name", "", "The room name to be created or connected to")
 	flag.Parse()
 
 	if *runAsServer {
-		server.StartServer(&internal.AppCtx{
-			Log: *log.New(os.Stdout, "", 0),
-			ServerCtx: &internal.ServerCtx{
+		server.StartServer(&server.AppCtx{
+			Log:         *log.New(os.Stdout, "", 0),
+			GRPCEnabled: *enableGrpc,
+			ServerCtx: &server.ServerCtx{
 				Port: *serverPort,
 			},
 		})
@@ -44,8 +46,21 @@ change pion connection information between hosts before establishing the p2p con
 		os.Exit(1)
 	}
 
-	return &internal.AppCtx{
+	if *enableGrpc {
+		conn, err := grpc.Dial(*serverURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			panic(err)
+		}
+		return &server.AppCtx{
+			DiscoveryClient: server.NewDiscoveryClient(conn),
+			GRPCEnabled:     *enableGrpc,
+			ServerURL:       *serverURL,
+			ScreenName:      *screenName,
+		}, *create, *roomName
+	}
+
+	return &server.AppCtx{
 		ServerURL:  *serverURL,
 		ScreenName: *screenName,
-	}, *create, *connect, *roomName
+	}, *create, *roomName
 }

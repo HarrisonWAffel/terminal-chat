@@ -7,15 +7,17 @@ import (
 )
 
 func main() {
-	ctx, create, connectionId, roomName := cmd.RegisterFlags()
+	ctx, create, roomName := cmd.RegisterFlags()
 	if create {
-		if roomName == "" {
-			client.NewOfferClient(ctx).HostNewConversation(ctx)
-		} else {
-			client.NewOfferClient(ctx).HostNewConversation(ctx, client.ConnectionConfig{CustomToken: roomName})
+		c := client.NewOfferClient(ctx)
+		if roomName != "" {
+			config := &client.ConnectionConfig{CustomToken: roomName}
+			c.HostNewConversation(ctx, *config)
 		}
-	} else {
-		fmt.Println("Attempting to  connect to " + connectionId)
-		client.NewReceiverClient(ctx).ConnectToConversationId(ctx, connectionId)
+		c.HostNewConversation(ctx)
 	}
+
+	fmt.Println("Attempting to  connect to " + roomName)
+
+	client.NewReceiverClient(ctx).ConnectToConversationToken(ctx, roomName)
 }

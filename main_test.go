@@ -2,47 +2,135 @@ package main
 
 import (
 	"fmt"
-	"github.com/HarrisonWAffel/terminal-chat/internal"
 	"github.com/HarrisonWAffel/terminal-chat/internal/client"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
 	"github.com/pion/webrtc/v3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
 
-var ctx = &internal.AppCtx{
+var httpCtx = &server.AppCtx{
 	Log:       *log.New(os.Stdout, "", 0),
 	ServerURL: "http://localhost:9999",
-	IsTest:    true,
-	ServerCtx: &internal.ServerCtx{
+	ServerCtx: &server.ServerCtx{
 		Port: ":9999",
 	},
 }
 
-func Test(t *testing.T) {
-	go server.StartServer(ctx)
-	h, recv := NewTestOfferClient(ctx)
-	r := NewTestReceiverClient(ctx)
+var GrpcCtx = &server.AppCtx{
+	GRPCEnabled: true,
+	Log:         *log.New(os.Stdout, "", 0),
+	ServerURL:   "http://localhost:9998",
+	ServerCtx: &server.ServerCtx{
+		Port: ":9998",
+	},
+}
 
-	go h.HostNewConversation(ctx, client.ConnectionConfig{CustomToken: "testing"})
+func init() {
+	go server.StartHTTPServer(httpCtx)
+	go server.StartGRPCServer(GrpcCtx)
+	conn, err := grpc.Dial(GrpcCtx.ServerCtx.Port, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	GrpcCtx.DiscoveryClient = server.NewDiscoveryClient(conn)
+}
+
+func TestHTTP(t *testing.T) {
+	h, recv := NewHTTPTestHostClient(httpCtx)
+	r := NewHTTPTestReceiverClient(httpCtx)
+
+	go h.HostNewConversation(httpCtx, client.ConnectionConfig{CustomToken: "testing"})
 	time.Sleep(10 * time.Second) // just needs to be longer than the offer clients ICE candidate gathering
-	go r.ConnectToConversationId(ctx, "testing")
+	go r.ConnectToConversationToken(httpCtx, "testing")
 
+	ReceiveMessageOrFailTest(t, recv)
+}
+
+func TestGRPC(t *testing.T) {
+	h, recv := NewGRPCTestHostClient(GrpcCtx)
+	r := NewGRPCTestReceiverClient(GrpcCtx)
+
+	go h.HostNewConversation(GrpcCtx, client.ConnectionConfig{CustomToken: "testing"})
+	time.Sleep(10 * time.Second) // just needs to be longer than the offer clients ICE candidate gathering
+	go r.ConnectToConversationToken(GrpcCtx, "testing")
+
+	ReceiveMessageOrFailTest(t, recv)
+}
+
+func TestMultipleHTTP(t *testing.T) {
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 25; i++ {
+		wg.Add(1)
+		go func(i int, wg *sync.WaitGroup) {
+			h1, recv1 := NewHTTPTestHostClient(httpCtx)
+			r := NewHTTPTestReceiverClient(httpCtx)
+			go h1.HostNewConversation(httpCtx, client.ConnectionConfig{CustomToken: fmt.Sprintf("test%d", i)})
+			time.Sleep(10 * time.Second)
+			go r.ConnectToConversationToken(httpCtx, fmt.Sprintf("test%d", i))
+			ReceiveMessageOrFailTest(t, recv1)
+			wg.Done()
+		}(i, wg)
+	}
+	wg.Wait()
+}
+
+func TestMutlipleGRPC(t *testing.T) {
+	h1, recv1 := NewGRPCTestHostClient(GrpcCtx)
+	r := NewGRPCTestReceiverClient(GrpcCtx)
+
+	h2, recv2 := NewGRPCTestHostClient(GrpcCtx)
+	r2 := NewGRPCTestReceiverClient(GrpcCtx)
+
+	go h1.HostNewConversation(GrpcCtx, client.ConnectionConfig{CustomToken: "test1"})
+	go h2.HostNewConversation(GrpcCtx, client.ConnectionConfig{CustomToken: "test2"})
+
+	time.Sleep(10 * time.Second)
+
+	go r.ConnectToConversationToken(GrpcCtx, "test1")
+	go r2.ConnectToConversationToken(GrpcCtx, "test2")
+
+	ReceiveMessageOrFailTest(t, recv1)
+	ReceiveMessageOrFailTest(t, recv2)
+}
+
+func ReceiveMessageOrFailTest(t *testing.T, channel chan string) {
 L:
 	for {
 		select {
-		case m := <-recv:
-			t.Log(m)
+		case <-channel:
 			break L
-		case <-time.After(time.Minute * 1):
+		case <-time.After(time.Second * 25):
+			t.Log("failed to receive message after 25 seconds")
 			t.FailNow()
 		}
 	}
 }
 
-func NewTestReceiverClient(appCtx *internal.AppCtx) client.ReceivingClient {
+func NewHTTPTestReceiverClient(appCtx *server.AppCtx) client.ReceivingClient {
+	return &client.HTTPReceiver{Client: NewTestReceiverClient(appCtx)}
+}
+
+func NewHTTPTestHostClient(appCtx *server.AppCtx) (client.HostClient, chan string) {
+	c, recv := NewTestOfferClient(appCtx)
+	return &client.HTTPHost{Client: c}, recv
+}
+
+func NewGRPCTestReceiverClient(appCtx *server.AppCtx) client.ReceivingClient {
+	return &client.GRPCReceiver{Client: NewTestReceiverClient(appCtx)}
+}
+
+func NewGRPCTestHostClient(appCtx *server.AppCtx) (client.HostClient, chan string) {
+	c, recv := NewTestOfferClient(appCtx)
+	return &client.GRPCHost{Client: c}, recv
+}
+
+func NewTestReceiverClient(appCtx *server.AppCtx) *client.Client {
 	pc, err := webrtc.NewPeerConnection(client.Config)
 	if err != nil {
 		panic(err)
@@ -80,10 +168,10 @@ func NewTestReceiverClient(appCtx *internal.AppCtx) client.ReceivingClient {
 		})
 	})
 
-	return &client.Receiver{Client: c}
+	return c
 }
 
-func NewTestOfferClient(appCtx *internal.AppCtx) (client.HostClient, chan string) {
+func NewTestOfferClient(appCtx *server.AppCtx) (*client.Client, chan string) {
 	pc, err := webrtc.NewPeerConnection(client.Config)
 	if err != nil {
 		panic(err)
@@ -118,5 +206,5 @@ func NewTestOfferClient(appCtx *internal.AppCtx) (client.HostClient, chan string
 		recv <- string(msg.Data)
 	})
 
-	return &client.Host{Client: c}, recv
+	return c, recv
 }

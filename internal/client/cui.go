@@ -19,47 +19,16 @@ func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 
-var pageIndex = 1
+var textBoxSelected = true
 
 func nextView(g *gocui.Gui, v *gocui.View) error {
-	switch pageIndex {
-	case 0:
+	switch textBoxSelected {
+	case true:
 		g.SetCurrentView("bottom")
-	case 1:
+	case false:
 		g.SetCurrentView("main")
 	}
-	if pageIndex > 1 {
-		pageIndex = 0
-		_, err := g.SetCurrentView("main")
-		return err
-	}
-	pageIndex++
-	return nil
-}
-
-func cursorDown(g *gocui.Gui, v *gocui.View) error {
-	if v != nil {
-		cx, cy := v.Cursor()
-		if err := v.SetCursor(cx, cy+1); err != nil {
-			ox, oy := v.Origin()
-			if err := v.SetOrigin(ox, oy+1); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func cursorUp(g *gocui.Gui, v *gocui.View) error {
-	if v != nil {
-		ox, oy := v.Origin()
-		cx, cy := v.Cursor()
-		if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
-			if err := v.SetOrigin(ox, oy-1); err != nil {
-				return err
-			}
-		}
-	}
+	textBoxSelected = !textBoxSelected
 	return nil
 }
 
@@ -73,25 +42,20 @@ func (gui *GUI) getInput(g *gocui.Gui, v *gocui.View) error {
 	gui.InputChan <- gui.Username + ": " + l
 	gui.NetworkChan <- gui.Username + ": " + l
 
-	v.SetCursor(0, 0)
+	err = v.SetCursor(0, 0)
+	if err != nil {
+		return err
+	}
+
 	v.Clear()
 	return nil
 }
 
 func (gui *GUI) keybindings(g *gocui.Gui) error {
-	if err := g.SetKeybinding("side", gocui.KeyCtrlSpace, gocui.ModNone, nextView); err != nil {
-		return err
-	}
 	if err := g.SetKeybinding("main", gocui.KeyCtrlSpace, gocui.ModNone, nextView); err != nil {
 		return err
 	}
 	if err := g.SetKeybinding("bottom", gocui.KeyCtrlSpace, gocui.ModNone, nextView); err != nil {
-		return err
-	}
-	if err := g.SetKeybinding("side", gocui.KeyArrowDown, gocui.ModNone, cursorDown); err != nil {
-		return err
-	}
-	if err := g.SetKeybinding("side", gocui.KeyArrowUp, gocui.ModNone, cursorUp); err != nil {
 		return err
 	}
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
@@ -112,8 +76,7 @@ func (gui *GUI) layout(g *gocui.Gui) error {
 		}
 		v.Title = "Terminal Chat"
 
-		stats, bool := gui.PeerConn.GetStats().GetConnectionStats(gui.PeerConn)
-		_ = bool
+		stats, _ := gui.PeerConn.GetStats().GetConnectionStats(gui.PeerConn)
 		fmt.Fprintln(v, stats.Type+"\n")
 		fmt.Fprintln(v, "Username:\n"+gui.Username+"\n")
 		fmt.Fprintf(v, "# Channels: %d\n", stats.DataChannelsOpened)
@@ -123,7 +86,7 @@ func (gui *GUI) layout(g *gocui.Gui) error {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
-		v.Editable = true
+		v.Editable = false
 		v.Wrap = true
 		v.Title = "Chat Room"
 		v.Highlight = true
