@@ -6,7 +6,7 @@ a Peer to peer terminal chat application featuring end to end AES encryption, a 
 
 ### Installation
 
-`go install github.com/HarrisonWAffel/terminal-chat` ???
+`go install github.com/HarrisonWAffel/terminal-chat`
 
 ### Program flags
 
