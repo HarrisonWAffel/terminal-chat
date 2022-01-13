@@ -97,7 +97,11 @@ func CreateConnectionToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	sd := webrtc.SessionDescription{}
-	pion.Decode(string(b), &sd)
+	err = pion.Decode(string(b), &sd)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	connToken := createNewConnectionToken(r.Header.Get("req-conn-id"))
 	connectionMap.Lock()
@@ -169,8 +173,8 @@ func GetInfoForToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
 }
 
 func ConnectWithToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
-	connectionToken := r.Header.Get("conn-token")
-	if connectionToken == "" {
+	roomName := r.Header.Get("conn-token")
+	if roomName == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -186,12 +190,17 @@ func ConnectWithToken(ctx *AppCtx, w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := webrtc.SessionDescription{}
-	pion.Decode(string(b), &token)
+	err = pion.Decode(string(b), &token)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	connectionMap.Lock()
-	c, ok := connectionMap.m[connectionToken]
+	c, ok := connectionMap.m[roomName]
 	if ok {
 		c.snd <- token
+		ctx.Log.Println("A peer has connected to", roomName)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 	}
