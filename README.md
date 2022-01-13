@@ -1,4 +1,5 @@
 # Terminal Chat
+[![Go Report Card](https://goreportcard.com/badge/github.com/HarrisonWAffel/terminal-chat)](https://goreportcard.com/report/github.com/HarrisonWAffel/terminal-chat)
 
 a Peer to peer terminal chat application featuring end to end AES encryption, a GUI, optional gRPC, and other features.
 
