@@ -1,8 +1,33 @@
 # Terminal Chat
 
-a Peer to peer terminal chat application featuring end to end AES encryption, gRPC, a GUI, and other features.
+a Peer to peer terminal chat application featuring end to end AES encryption, a GUI, optional gRPC, and other features.
 
 ![example](./screen-shot.png)
+
+### Installation
+
+`go install github.com/HarrisonWAffel/terminal-chat` ???
+
+### Program flags
+
+```
+Usage of ./terminal-chat:
+  -create
+        pass this flag if you wish to begin a conversation and wait for a peer to connect
+  -grpc
+        pass this flag to start or connect to a gRPC server
+  -room-name string
+        The room name to be created or connected to
+  -screen-name string
+        The name you wish to use in the conversation
+  -server
+        run the application in server mode. Clients connect to the server to
+        exchange pion connection information between hosts before establishing the p2p connection
+  -server-port string
+        The server port that should be used, should begin with : (e.g. :8080)  (default ":8080")
+  -server-url string
+        The URL of the server you want to connect to communicate p2p connection info with another client
+```
 
 ### Architecture
 ```
@@ -24,16 +49,50 @@ a Peer to peer terminal chat application featuring end to end AES encryption, gR
                                                     |     to one another  
 ```                        
 
+### Libraries Used 
+
++ [Pion/webRTC](https://github.com/pion/webrtc) - webRTC communication
++ (optional) [go-gRPC](https://grpc.io/docs/languages/go/) - REST alternative
++ [goCUI](https://github.com/jroimartin/gocui) - GUI API 
+
 
 ### How to Run 
 
 This application needs to connect to a dedicated server so that peers may share their
-connection details with one another using custom tokens. The dedicated server only
-holds onto connection details for ten minutes at most, and deletes each token once
-both parties have connected to one another. A Dockerfile for the server has been provided. 
-This server must be exposed to the internet if you wish to have peers from outside of 
-your local network connect to you. To start the dedicated server, compile this repository and run 
-the following command 
+connection details with one another using custom room-names.
+
+
+I (at the time of writing) am hosting a free HTTPS terminal-chat server that can be found at this address, 
++ https://terminal-chat.space
+
+To use this URL by default run this command (and omit the `-server-url` flag when running any following commands)
+
+`export TERMINAL_CHAT_URL=https://terminal-chat.space`
+
+#### Connecting Clients
+
+Once a dedicated server has been created peers can begin to connect with one another using the following commands
+
+To create a new connection token use the following command, you can provide a custom token or use a generated UUID as a token by omitting the `-room-name` flag and passing `n`.
+```bash 
+./terminal-chat -server-url=${SERVER_URL} -screen-name=host -create -room-name=${TOKEN}
+```
+
+To connect to a conversation run the following command
+```bash 
+./terminal-chat -server-url=${SERVER_URL} -screen-name=guest -room-name=${TOKEN}
+```
+
+#### Creating A Server
+
+A Dockerfile for the server has been provided.
+This server must be exposed to the internet if you wish to have peers from outside of
+your local network connect to you. The dedicated server only
+holds onto connection details for ten minutes at most, and deletes all connection information once
+both parties have connected to one another.
+
+To start the dedicated server, compile this repository and run
+one of the following commands,
 
 To run without a docker container
 ```bash
@@ -50,43 +109,9 @@ To run with a docker container
 docker build . -t terminal-chat-server && docker run -p 8081:8081 -d terminal-chat-server 
 ```
 
-Please note that when hosting an HTTP server you should all timeouts to 10 **minutes** to ensure room hosts can receive peer connection information.
 
-Once a dedicated server has been created peers can begin to connect with one another using the following commands
+### Server Deployment Notes
 
-To create a new connection token use the following command, you can provide a custom token or use a generated UUID as a token
-```bash 
-./terminal-chat -server-url=${SERVER_URL} -screen-name=host -create -room-name=${TOKEN}
-```
++ when hosting an HTTP/S server you should set all timeouts (gateway, read, write) to 10 **minutes** to ensure room hosts can receive peer connection information.
 
-To connect to a conversation run the following command 
-```bash 
-./terminal-chat -server-url=${SERVER_URL} -screen-name=guest -connect=${TOKEN}
-```
-
-If you do not want to provide the `-server-url` each time you run the command you can set 
-the `TERMINAL_CHAT_URL` environment variable equal to the server URL.
-
-flags
-
-```bash
-Usage of ./terminal-chat:
-  -connect string
-        the room ID created by the other peer you wish to connect to
-  -create
-        pass this flag if you wish to begin a conversation and wait for a peer to connect
-  -grpc
-        pass this flag to start a gRPC server
-  -room-name string
-        immediately supply the room name to be created
-  -screen-name string
-        The name you wish to use in the conversation
-  -server
-        run the application in server mode. Clients connect to the server to
-        exchange pion connection information between hosts before establishing the p2p connection
-  -server-port string
-        The server port that should be used when creating a server, should begin with : (e.g. :8080)  (default ":8080")
-  -server-url string
-        The URL of the server you want to connect to communicate p2p connection info with another client
-
-```
++ gRPC servers require an HTTP2 compatible cloud environment, other than this requirement the gRPC implementation is generally better than the HTTP/s implementation.

@@ -2,11 +2,9 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/HarrisonWAffel/terminal-chat/internal/pion"
 	"github.com/HarrisonWAffel/terminal-chat/internal/server"
-
 	"github.com/pion/webrtc/v3"
 	"github.com/pkg/errors"
 )
@@ -34,30 +32,15 @@ func (c *GRPCReceiver) ConnectToConversationToken(appCtx *server.AppCtx, Convers
 		panic(errors.Wrap(err, "error parsing response from server, fatal"))
 	}
 
-	offer := webrtc.SessionDescription{}
-	err = json.Unmarshal([]byte(resp.GetConnInfoBase64()), &offer)
-	if err != nil {
-		panic(errors.Wrap(err, "error parsing response from server, fatal"))
-	}
-
-	err = c.SetRemoteDescription(offer)
-	if err != nil {
-		panic(errors.Wrap(err, "set remote offer error, fatal"))
-	}
-
-	answer, err := c.CreateAnswer(nil)
-	if err != nil {
-		panic(errors.Wrap(err, "create answer error"))
-	}
-
-	err = c.SetLocalDescription(answer)
-	if err != nil {
-		panic(errors.Wrap(err, "cannot set local description"))
-	}
+	c.ConnectToOffer([]byte(resp.GetConnInfoBase64()))
 
 	<-webrtc.GatheringCompletePromise(c.PeerConnection)
 
-	connInfo := pion.Encode(c.LocalDescription())
+	connInfo, err := pion.Encode(c.LocalDescription())
+	if err != nil {
+		panic("could not encode connection information: " + err.Error())
+	}
+
 	x := server.ConnectionInfo{ConnInfoBase64: connInfo, Token: ConversationToken}
 	_, err = appCtx.DiscoveryClient.JoinConversation(context.Background(), &x)
 	if err != nil {
@@ -68,40 +51,16 @@ func (c *GRPCReceiver) ConnectToConversationToken(appCtx *server.AppCtx, Convers
 }
 
 func (c *GRPCHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...ConnectionConfig) {
-	connectionName := ""
-	if len(connConfig) == 0 {
-		connectionName = ReadCustomConnectionName()
-	} else {
-		connectionName = connConfig[0].CustomToken
-	}
+	connectionName := ReadCustomConnectionName(connConfig...)
 
-	offer, err := c.CreateOffer(nil)
+	desc := c.GatherICECandidate()
+	encode, err := pion.Encode(desc)
 	if err != nil {
-		panic(err)
+		panic("could not encode connection information: " + err.Error())
 	}
-
-	if err := c.SetLocalDescription(offer); err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Gathering ICE Candidates before continuing...")
-	c.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if candidate == nil {
-			go func() { c.ICECandidateChan <- *c.LocalDescription() }()
-		}
-	})
-
-	// Client will be available when the first valid ICE
-	// candidate is found and added to the LocalDescription
-	var desc webrtc.SessionDescription
-	select {
-	case m := <-c.ICECandidateChan:
-		desc = m
-	}
-	fmt.Println("Done gathering!")
 
 	recv, err := appCtx.DiscoveryClient.PostConnectionInfo(context.Background(), &server.ConnectionInfo{
-		ConnInfoBase64: pion.Encode(desc),
+		ConnInfoBase64: encode,
 		Token:          connectionName,
 	})
 	if err != nil {
@@ -119,18 +78,7 @@ func (c *GRPCHost) HostNewConversation(appCtx *server.AppCtx, connConfig ...Conn
 		}
 	}
 
-	if info == "token timed out" {
-		fmt.Println("connection failed: token timed out before peer connected")
-		return
-	}
-
-	descr := webrtc.SessionDescription{}
-	pion.Decode(info, &descr)
-	err = c.SetRemoteDescription(descr)
-	if err != nil {
-		fmt.Println("error setting remote description")
-		panic(err)
-	}
+	c.DecodeAndSetDescription(info)
 
 	select {}
 }

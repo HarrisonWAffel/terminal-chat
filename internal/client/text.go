@@ -69,26 +69,30 @@ func decryptText(s, keyString string) string {
 	return fmt.Sprintf("%s", plaintext)
 }
 
-func ReadCustomConnectionName() (connectionName string) {
-	fmt.Print("Would you like to use a custom connection name? (y/n): ")
-	reader := bufio.NewReader(os.Stdin)
-	text := ""
-	for {
-		t, _ := reader.ReadString('\n')
-		text = strings.ReplaceAll(strings.ToLower(t), "\n", "")
-		if text == "y" || text == "yes" || text == "n" || text == "no" {
+func ReadCustomConnectionName(connConfig ...ConnectionConfig) (connectionName string) {
+	if len(connConfig) == 0 {
+		fmt.Print("Would you like to use a custom connection name? (y/n): ")
+		reader := bufio.NewReader(os.Stdin)
+		text := ""
+		for {
+			t, _ := reader.ReadString('\n')
+			text = strings.ReplaceAll(strings.ToLower(t), "\n", "")
+			if text == "y" || text == "yes" || text == "n" || text == "no" {
+				break
+			}
+			fmt.Print("Please enter yes or no (y/n): ")
+		}
+		switch text {
+		case "y", "yes":
+			fmt.Print("Please enter the custom connection name now: ")
+			connectionName, _ = reader.ReadString('\n')
+			connectionName = strings.ReplaceAll(connectionName, "\n", "")
+		default:
+			connectionName = uuid.New().String()
 			break
 		}
-		fmt.Print("Please enter yes or no (y/n): ")
-	}
-	switch text {
-	case "y", "yes":
-		fmt.Print("Please enter the custom connection name now: ")
-		connectionName, _ = reader.ReadString('\n')
-		connectionName = strings.ReplaceAll(connectionName, "\n", "")
-	default:
-		connectionName = uuid.New().String()
-		break
+	} else {
+		connectionName = connConfig[0].CustomToken
 	}
 	return
 }

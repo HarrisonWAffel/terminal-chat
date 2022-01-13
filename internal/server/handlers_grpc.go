@@ -17,7 +17,10 @@ type DiscoveryServerImpl struct {
 
 func (d *DiscoveryServerImpl) PostConnectionInfo(connInfo *ConnectionInfo, ds Discovery_PostConnectionInfoServer) error {
 	sd := webrtc.SessionDescription{}
-	pion.Decode(connInfo.ConnInfoBase64, &sd)
+	err := pion.Decode(connInfo.ConnInfoBase64, &sd)
+	if err != nil {
+		return err
+	}
 	connToken := createNewConnectionToken(connInfo.GetToken())
 
 	connectionMap.Lock()
@@ -37,10 +40,13 @@ func (d *DiscoveryServerImpl) PostConnectionInfo(connInfo *ConnectionInfo, ds Di
 				connInfo.ConnInfoBase64 = "token timed out"
 				return nil
 			}
-			j := pion.Encode(msg)
-			err := ds.Send(&ConnectionInfo{ConnInfoBase64: j, Token: connToken})
+			j, err := pion.Encode(msg)
 			if err != nil {
-				fmt.Println("err: ", err.Error())
+				return err
+			}
+			err = ds.Send(&ConnectionInfo{ConnInfoBase64: j, Token: connToken})
+			if err != nil {
+				return err
 			} else {
 				fmt.Println("Connection information has been shared between parties")
 			}
@@ -72,7 +78,10 @@ func (d *DiscoveryServerImpl) GetConnectionInfoForToken(ctx context.Context, cTo
 
 func (d *DiscoveryServerImpl) JoinConversation(ctx context.Context, cToken *ConnectionInfo) (*Empty, error) {
 	token := webrtc.SessionDescription{}
-	pion.Decode(cToken.GetConnInfoBase64(), &token)
+	err := pion.Decode(cToken.GetConnInfoBase64(), &token)
+	if err != nil {
+		return nil, err
+	}
 
 	connectionMap.Lock()
 	defer connectionMap.Unlock()
